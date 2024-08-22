@@ -28,7 +28,7 @@ CharNames  = Batman,Superman
 # Discordwebhook. Set up your own discord server and channel and create a webhook for it.
 DiscordWebhook = https://discord.com/api/webhooks/your webhook here
 
-[NOTIFICATION SETTINGS]
+[ALERT SETTINGS]
 # Enter time (in minutes) for how far before your concentration is full to start alerting you.
 # defailt is to alert 3 hrs before your concentration is full (180 min)
 AlertTime     = 180
