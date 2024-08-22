@@ -32,7 +32,7 @@ param ([switch]$runFromTask)
 if (!$runFromTask) {$canToast = $True}
 
 # Current Concentration interval
-$conMath = 0.17361 # per minute. Seconds for 0 to 1000 currently = 345600, which equals 0.17361 (with a line over it) per 60 seconds
+$conMath = 0.1736111111111111 # per minute. Seconds for 0 to 1000 currently = 345600, which equals 0.17361 (with a line over it) per 60 seconds
 # script version
 $version = "v1.0.0"
 
