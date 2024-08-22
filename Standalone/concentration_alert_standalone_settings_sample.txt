@@ -1,5 +1,5 @@
-#######################################################
-# CONCENTRTATION ALERT SAMPLE SETTINGS AND DESCRIPTIONS
+######################################################
+# CONCENTRATION ALERT SAMPLE SETTINGS AND DESCRIPTIONS
 # Use this for reference, but put your actual settings in the main concentration_alert_standalone_settings.txt file, not this one!
 # A couple Notes:
 # 1. Do not modify the section headers or anything before the equals (=) sign.
@@ -7,7 +7,7 @@
 # 3. See Examples and if you have any questions, pop in the Discord Server here: https://discord.com/invite/gjjA8M8KX8
 # 4. Make sure you also read the main instructions on the github site, as you also need the Addon that goes along with this.
 # 5. Reminder, don't actually use this file, put your settings in the one called: wow_concentration_alert_standalone_settings.txt
-#######################################################
+######################################################
 
 [REALM SETTINGS]
 # Enter the full path to the ConcentrationAlert.lua file on your computer
