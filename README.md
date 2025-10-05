@@ -14,6 +14,6 @@ There is one slash command to utilize if you want to erase all saved concentrati
    1. Install The Addon from Curseforge, using your preferred addon manager or manually.
 
 #### Desktop App
-   1. Download Files in [Standalone](Standalone) to your computer.
+   1. Download Files in [Standalone](Standalone/) to your computer.
    2. Edit the settings file, see example settings file for help
    3. Click the shortcut link and good to go!
