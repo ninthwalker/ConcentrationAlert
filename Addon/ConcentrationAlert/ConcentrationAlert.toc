@@ -1,0 +1,16 @@
+## Interface: 120000, 110207, 110002, 110107
+## Title: |cffF35F05ConcentrationAlert|r
+## Author: Echellon
+## Version: v1.1.0
+## Category: Professions
+## Notes: Records Concentration amounts for each character and profession. To be used in conjuction with the desktop app for alerts when concentration is full.
+## X-Curse-Project-ID: 1088861
+## X-Website: https://www.curseforge.com/wow/addons/concentrationalert
+## X-Repo: https://github.com/ninthwalker/ConcentrationAlert
+## IconTexture: Interface\Icons\ui_concentration
+## DefaultState: Enabled
+## LoadOnDemand: 0
+## SavedVariables: ConAlertDB
+
+# Base Addon File
+ConcentrationAlert.lua
