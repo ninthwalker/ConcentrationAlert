@@ -1,8 +1,8 @@
 -- Title         : ConcentrationAlert
 -- Author        : Echellon
 -- Last Updated  : 20JAN2025
--- Game Version  : 12.0.0
--- Addon Version : 1.1.0
+-- Game Version  : 12.1.0
+-- Addon Version : 1.1.1
 -- https://github.com/ninthwalker/ConcentrationAlert
 
 -- Slash Commands
