@@ -1,7 +1,7 @@
-## Interface: 120000, 110207, 110002, 110107
+## Interface: 120100, 120007, 120005, 120000
 ## Title: |cffF35F05ConcentrationAlert|r
 ## Author: Echellon
-## Version: v1.1.0
+## Version: v1.1.1
 ## Category: Professions
 ## Notes: Records Concentration amounts for each character and profession. To be used in conjuction with the desktop app for alerts when concentration is full.
 ## X-Curse-Project-ID: 1088861
