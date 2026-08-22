@@ -42,7 +42,7 @@ Character Names  = Batman,Superman
 ### [DISCORD SETTINGS]
 #### Discord webhook
 Set up your own discord server and channel and create a webhook for it.  
-Discord Webhook = https://discord.com/api/webhooks/your webhook here  
+Discord Webhook = https://discord&#8203;.com/api/webhooks/your webhook here  
 
 ### [ALERT SETTINGS]
 #### Alert Time
