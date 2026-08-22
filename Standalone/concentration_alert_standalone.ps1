@@ -320,7 +320,7 @@ Function Show-SettingsWindow {
 
     $browseAddonPath = New-Object System.Windows.Forms.Button
     $browseAddonPath.Text = 'Browse'
-    $browseAddonPath.Font = 'Segoe UI,10,style=Bold'
+    $browseAddonPath.Font = 'Segoe UI,10'
     $browseAddonPath.Width = 70
     $browseAddonPath.Height = 25
     $browseAddonPath.FlatStyle = 'Flat'
@@ -390,7 +390,7 @@ Function Show-SettingsWindow {
     $save.Width = 125
     $save.Height = 36
     $save.BackColor = '#22C55E'
-    $save.ForeColor = '#E6EDF3'
+    $save.ForeColor = '#111827'
     $save.Font = 'Segoe UI,11,style=Bold'
     $save.FlatStyle = 'Flat'
     $save.FlatAppearance.BorderSize = 0
@@ -402,7 +402,7 @@ Function Show-SettingsWindow {
     $cancel.Width = 125
     $cancel.Height = 36
     $cancel.BackColor = '#EF4444'
-    $cancel.ForeColor = '#E6EDF3'
+    $cancel.ForeColor = '#111827'
     $cancel.Font = 'Segoe UI,11,style=Bold'
     $cancel.FlatStyle = 'Flat'
     $cancel.FlatAppearance.BorderSize = 0
@@ -933,7 +933,7 @@ if ($canToast) {
     # Form section
     Add-Type -AssemblyName System.Windows.Forms, PresentationFramework, PresentationCore, WindowsBase, System.Drawing
     [System.Windows.Forms.Application]::EnableVisualStyles()
-
+    
     # built-in logo
     # To convert use: [Convert]::ToBase64String((Get-Content -Path .\image.png -Encoding Byte))
     $WotlkLogoBase64Img  = "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAABCqSURBVGhD7VlpcBzHdX7dc+xisVicBEiCt0gCvE+JsEiKN+noshhVbMlRxKo4lfxIbMdRUpVI5UrFcqxUJUxKKf3JDyemrcikKxVZNiUXKfGAeES0xAPgad4iSIIEASyw2Gt2prvzvdnlAYKEIllV+aOHmt2ZnZ7ud37v6wF9IV/Ibyei9P25SnrXjAppTMIIFRVGCmEsTwkzQNqk4qtP6NKwz0U+FwNutC6sKwvMPCW9JdrSM1wlGqU2dcpSFcKQFMZJKyF6lKCrRtA5GLWHSB6qWn7449IUn1l+KwPSO2bO11J9XQlrnWNkkxbKIWhom+J9eB2XGgeWMTJczJDCp9SkrQ5B8j0S5vVARPfULD/ANz61fCYDUu9Pm6KN9R1H0TPwbLWU0FhrUsZKSoqeFGR1QNVOSYVuAYU9y6lDGo2ydTDWCG8apqgWMIrt1BTkpJHvOMr9p8jqIx+EC3wKGdaA1O6mRzD50zgteQcuFZartXhCWXq8EIqMjnpSmdaorbZIW+3fdbyua+2/1Vp0mhpoQMeKS1hZmmWuv/vHV9WqBel6L3Af9pT/NSn9ZZggooWFma0eqaK/lDLoIaGkKVaKrQX9LLHi6N7w6h7yCQY0/wUM2HhzGHtMSTZD4BdBgXDeLo+pV77/87bDL//9+hk0tbBuasJfaUk5xpBVjSEo4tDTeWFUMlD68plkdCddoG3/8HdvHf/WlyfMy+Xjf4MqecxRhlzfJWX5YdrdFC3MC4nlJ/65dDlEoM5wIoI7beQzW0M1La6RlBsORQ+tjzw4Jv5fu9f+fEaL1zq70nrZlu4KeHwKsKcOWR9HpsSloDohrSmOE1kxa4R4efaD+dYf/+rLb8YWzYq/U31svUtyg1TymrI9LHI3SBnocH8ZNgL9u5q/ZZH1anjBaY4P1OKhRDx4Viycm5oyN/kvUdf5KiIBXTUmw+Lw+P0F0cBt23gYibTBQ55f+NmZQ7HvmIPnEsmc/Kmj9HwBJ91UTQv97cTyk/8aXtxDPiECqMvSCdk4hNmbmHhitVg4qW7mor59bsR5BuGWEiViECw2YTgxjEoYG6YgDhghbcd9ZkZLfp9YMLqueuzR1cj9vSSKavFoyLDoNLwBwhqjkQMoKcrZqq3igZNPifG/0zJ7kfOO0NFJqA/0JhtHhIyxMJnCoQcddwqDlaMtjHLCOYvBYkPsSdN5zvG/t6hiUuYpX7pt/DQaIbtkTPjwfeS+LkvtnDNbW/52LNtgjOiNJbLLI/NnRac9NLC9v19VFXw2LKACDBTKpaqoTxUVZVi2iPc3hRW5JUizIEhTTz9RL342CGtE++TCsArHpsqKaN/JX+u1+Q9T+Xza2y3lQA0Z57rU7tr4yiPtpVkGyT0N6H+3RdpWZhNUfM5YBmhj/VnlI0t+Ornl4r6mCaJ51fxKSohetCMDBbnVWpQckLR5T45S2TJyuHFBFBJQIx1sC96Ekp4q0MJpLq2eEYXqA/AwOgYHCWN6dYLe3pej890Dp84fiCweeP/KszIIXuOZ8OjraTFhQ8OKt++u8Dvdc1ukzLQgwF/hvPZ1sNetPfbD8QvO/cA1kebODo8mVAf01JckPb3Io6cf8uh3v+TRijnQw/hIp+IcBo2tpjJKdVUR0srnX3BP0kAqRS3Tc7R+SYDn8vTU4hw9ttSmukSezl/rhzMizY1z0z+I1LT90Bf23mIZiK+Um8stfHa33NMA8K/fx2cF4NA4UbGxbMbjs+O2tYHrqS/l0vadoDAqi9BfI8ckkdt9GD5AOT8oFaqmTNqj5fPitHJBGeWzGSxkyAGe9iU9MvluPNuPeriGSFyn7mQ/bdl6KawnByOrI9EN7sw1s62ovVFJ16DbVyBdodNQGWJA3+65o6HNGm5UpJyDnRdP72qa7/05GTeKNkw6Iulsb5T6k8AcAe+C1gDzw6MMqWTgZYWUSCO3Z080NGeiApQxoTDkq4Aaa1yqKEeDBpRyTShRSYdOGtp5JkplbiTUAaZGpyw037567uAu8sVBripMsaa3dRZ0GyxDDEB/nYdcmCigjJTO1snPPllvS2cdfkc8cB+Q335V0KWki0njmIDz21BlxKbGKgklNRVgxJgaQQ9Ud9G0+hSNqtOUR0rlA0GjayxKlGMhk8aHhfFxOnJBUEUshnpAvQClGGJd4a5reu6xeuOIrWw8AjvR0WJeqOQdMjSFhFoK14NQCi9aln+XasUyadk1PJRRw0GYuzyLznZJyknAIRYDF6JYTNLoEYIKCuQNhdBYZ2hUIksjYnmaMo4oA+NzgabR9fAvagswjMVsyhQEXejyyHGZcoCk4rOollNL9XJZRVl2O64QLuZFAroNlkEG7H//T5A3YmrYmEhc6RjovdLYmFtmSsyKE8GGl2pjUTp4LgNFebhCGuUpYudpDJTjxu/nFc2cYCga1eS6ihZOjtONrKJC4NP4kYgZUsdC3yDp0vWUTxevozPYPBdTbxjB30jN+ob8ss7erqv44QqzO2mCqea/VzIw3ZJBBsxQH1WQsUHEuFzF+S07JvUnHGou3mWBIcInFDSdvmhRdz88KWwOL3qqpgljotSVM5TKF2j6hDJyI4pcmaVpIzVVWgGVRzSNrOaMLjZXIRzqBvyeuG4hKi5nengUxaCYqfk/3h/f51uR8wY9B9SsMVvZBXC5LYMMQIkmYEAtloXRTu9f7W6IoBaqSrfDqbk7Ri2LjnVEqPOGAyWQu8bFHR+5HlBDhaZxCRhTn8d8HPk8TcL57EoPNRFQTbmH/uHhORQw7LjQiW8rBkQC/iD/WYubAudUvrRtQkRK2cPpixSq09IkSrdDucuAIEqiEOfwwVqfUlSOZlOEBpbS3PxQFotdQDErphJIJaEDqk8YahoV0LgaGIGq4cwDBFIVwjhrnEBhe8B7Rqo8nkOqGIcuXtEUBwAIJr6cVkV+EQrWjpJvyh3tBwLrgQfHEW4unlsyyABpFLwJeMREAiHFto8ngeXMCjEhxnC6MHspj1h05BKoBJTgbm3BnSMBj9MRhaaxBYq7FmoDDQzNrQyduGliBBHCdtMBnOKPpEU5T1JHF+gE1ODIMjXhPjJIHOjOnkDEWIG77t4VAaHywJG0QCWiNB0aEQA8EO9Bwh4C5gNOz14qUH8KVAINilDI0slQ83hJ08ZFKBpBNgOd0AoBiVlqaszQ5EYbxQlPQ3mNAu7OBijgAsUwF3ONIcoz+lSVZQKLzeZVZRqRyBdvFWWQAYGQKeRZj4t0cFWh5m/XnYbyAdrsncKLSSqzJR2/LOlyP0yEMvggF81r+jhJk+v6oHgOhx02NQMDJtZnaR6iEIOS4S4NEe7vd+hyD/rL7ay5JeGe2fh9Ly296GETVeMgO/BLN+ZLlYaEMsgA31s0YGnncoiOVJj0hw8er0wV6NRNv9yRnqHkUDIXLwF0/Rgbj7xGwY5M0cyJGIvABb5DXaAeORhXVyVo8rg0BRjDgmSljl5QkwCohHlv+754ptH4Bnw69c0llyqRhpMYWm0TXK5a0XZ/A2rX/cgE0jodoG7B7xvHVjY1dt5wWznxuRixPy2GucjTKRaNAI0K5AFKmUJgW0gjK9CVywEvyPsrPYqOXwEyO2UUsRTFoYSlGGk0atPQhWs+ORYjGKvBB8/KXKpITTp73NaGWA2/Y2rkHRy0OI0Bg2SQASwo4T3IXG6VkUzBXUNXglbbqJ7iXfbOzYMoitw9dy2gvoyPBVkRxne+B1aKLn2+p4JOfZyFN7mL8+/c9LyQLjDgXelGLYH/3FSCU8tBrbIWgQh6qEO05n1nDdAFHnWDgGJD3k4MMcDoysPoBRd46xeowuNtb2zrCnyzDTwEOI1mA0+XRsLJqIMOwgbFRiEDCmWBmSzOeS8WoVPXYMTlAqmA0Yy3nTiATBIRy6Q1ddywyLUYQrk7F70OE5AqDjY+etup17d2+RQ8wRmAfnRey8ih0uK3ZIgB1Sv3XBXCf5f7pSXkgkljm1acPOS8ih4BhLrtfRZe8FoenrzBMMd3QJVZSRRvDhzn2MU8dSZt1ALvlkN+ixRCNCyHkujYV5NQFwbcFE7PABVtLD9/7iP31Qnjp6yAhvOZ9MEv71Qv+3VnaegtGWIAi238/wRzGggfCyIvmGNb21N5b5NEYbGaxdeFTKcNxYFAp6+BgRJ2WYgOM0oDJtufA0SC8HWlLUpnQdbgVd59WfhjZErifmcf2CeicacYqajfy23Sv9na7mnrhaJZVhK183ppyCC5pwGxTM0HoE5vKXhTCm9JrnfmNz5uH/GicYJTg7Ga+SO6cgq5jXPF3oSbGRa9jEcDGTQmJYBuGMQohdJSKGZ+o2cJwOyg9w2sCqeSOtVxKPHiQNfcb0hyljBj9aXZHF350cHiuMFyTwPE4/vQ/Ox/BP+4zuoGSn4v+Ohk4/H98nlg0a2+wI1qapzoofmNSB6XMlRHeVNN2q+kWLyRGsDG0LKo4NRRRo4gpcdiezkaLLaSqurH0bypDnk+wypWQfSQZH1H99nP59vONWL78T3BrwENnUVqbiyuOFQ4Le8r6d1zX5HG/+swpyW11Y5vWyUmrnlweou1GZv1SgN+/0BdlBbOiYJN3gCVhsc1QyxgUpbTriM25YFQaxY5FAGtdnzGfH5J4GHHAUr+G0FnL8NNgFIo33/0A3rGXHjrw54rTTtivpljqQjohXgxtrL9lZJKQ2RYA3I7Z/0pGshrjMshuhHtrZicfFKMnT2t+WHxE1vrSbyL70NBZsK3kNwLGDCZOxLVlEVDmtGXzWNHVpxAI308cKdy1EoD+JQNJoqyP3/sgPoDc3X7yf7Tzb+whVnC75A4KsaIb5avbH+t+PRQuWcK3RJUD0f31omgJT0XG94zB7u6T+2vWRz4hc3CUrqyPEKjy+M0qixGDSB0I8vLqQ4Hwyk/VIXt4sh48RgdS9C4skqqxXjLljrnpzYfO1C12LR1dicvTn3PlmZJSDXwHHd+fA+r4/AG3CFshwArjAbZ+bmkak3vPLb2+2/sfP7okeBRaaW3W9rPMWEsSui+4mkoxWuufwv9BCiXkzK7vf0DevSlf9/9fGbP0bXZXt0aKQTzwUfg9dvHJ8mwBgBx0GVKFxAZdkp+KWtGQo9Nqzqnv5nf1ZX++iO71rcfsJYd7y18txDkdxkTnNHG3IACA3yE51qd8ZS362jS++7xA3LZY4t3rM8euJp+cmD6m8oEm5QIRmLPH3p9sECHYWTYGkjtbkYuiq9y3YXdkHc6xq0FMj6BjloLTyJ/HS8wTisa8Rbb9ffvPJroeuInoyw6rOqL/+CAxLCvnOl2/eKPLqlHZ+bqlXIfzhaCr9m2Xmah0TAEY+/RbWnzS3C7Xhhx07HYLdGWxMrj+0rXQ2RYA+4nmR0LWowo/CW63KMo8jIBfo/IcwNLCh09aSurA2ynExuabu4bWth12shRYJVjJQXTEMHq0CFYXRiTxib/bfSvje6qEx+Wlvg/y2cygCX/q4esfFl2KRR8Dtm6GkU+FpNJZpv8TxDeyRV4h4ix4fsk1A+2PiBzob8DKeR5XLwHtHnDi9H/1LS036qgTyOf2YA7Jdk6ezy4+jwouRRlMxmYzm/3an1LxTnt3MBJg4l2+5a4rKQ6DQP2IrUPVy9vG8JtPq18LgbcKWbbDJlzREJJU6GEiYBTGUvbTAQHoqvaB21GvpAv5P9diP4XH1+xe7cYWnYAAAAASUVORK5CYII="
@@ -978,7 +978,7 @@ if ($canToast) {
     # install Button
     $button_install                   = New-Object system.Windows.Forms.Button
     $button_install.BackColor         = "#22C55E"
-    $button_install.ForeColor         = "#E6EDF3"
+    $button_install.ForeColor         = '#111827'
     $button_install.text              = "Install"
     $button_install.width             = 120
     $button_install.height            = 50
@@ -992,7 +992,7 @@ if ($canToast) {
     # uninstall Button
     $button_uninstall                    = New-Object system.Windows.Forms.Button
     $button_uninstall.BackColor          = "#EF4444"
-    $button_uninstall.ForeColor          = "#E6EDF3"
+    $button_uninstall.ForeColor          = '#111827'
     $button_uninstall.text               = "Uninstall"
     $button_uninstall.width              = 120
     $button_uninstall.height             = 50
@@ -1006,7 +1006,7 @@ if ($canToast) {
     # reinstall Button
     $button_reinstall                    = New-Object system.Windows.Forms.Button
     $button_reinstall.BackColor          = "#F59E08"
-    $button_reinstall.ForeColor          = "#E6EDF3"
+    $button_reinstall.ForeColor          = '#111827'
     $button_reinstall.text               = "Reinstall"
     $button_reinstall.width              = 120
     $button_reinstall.height             = 30
