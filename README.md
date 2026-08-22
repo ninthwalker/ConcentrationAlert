@@ -25,7 +25,7 @@ See Examples and if you have any questions, pop in the Discord Server here: http
 
 ### [REALM SETTINGS]  
 #### Addon Lua Path  
-Enter the full path or browse to the ConcentrationAlert.lua file on your computer. Can usually be found at:  
+Enter the word `auto` to try and have it auto detect the first ConcentrationAlert.lua file it finds. If this does not work, then either manually enter the full lua path, or use the browse button to select the ConcentrationAlert.lua file on your computer. Can usually be found at:  
 `C:\Program Files (x86)\World of Warcraft\_classic_\WTF\Account\<ACCOUNT_NAME>\SavedVariables\ConcentrationAlert.lua`  
 
 #### Realm Names

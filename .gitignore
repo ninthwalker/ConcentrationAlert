@@ -1,0 +1,3 @@
+# Exclude settings, js, and JSON files
+*.js
+*.json
