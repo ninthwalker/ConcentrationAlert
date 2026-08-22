@@ -1,77 +1,188 @@
-﻿####################### Concentration Alert ###########################
-# Name: Concentration Alert - Standalone Version                      #
-# Desc: Sends Discord Notification when Concentraion is close to full #
-# Author: Ninthwalker (Echellon)                                      #
-# Instructions: https://github.com/ninthwalker/ConcentraionAlert      #
-# Last Updated: 20AUG2024                                             #
-# Version: 1.0.0                                                      #
-#######################################################################
+﻿####################### Concentration Alert ############################
+# Name: Concentration Alert - Standalone Version                       #
+# Desc: Sends Discord Notification when Concentration is close to full #
+# Author: Ninthwalker (Echellon)                                       #
+# Instructions: https://github.com/ninthwalker/ConcentrationAlert      #
+# Last Updated: 21AUG2026                                              #
+# Version: 2.0.0                                                       #
+########################################################################
 
-########################### CHANGE LOG ################################
-## 1.0.0                                                              #
-# Initial App release                                                 #
-#######################################################################
+########################### CHANGE LOG #################################
+## 1.0.0                                                               #
+# 26AUG2024: Initial App release                                       #
+## 1.0.1                                                               #
+# 04AUG2025: Minor bug fixes and UI adjustments                        #
+## 1.0.2                                                               #
+# 12JAN2026: Added support for Midnight expansion                      #
+## 1.1.0                                                               #
+# 02AUG2026: Deprecate mshta for .js for task execution                #
+## 2.0.0                                                               #
+# 20AUG2026: Re-design settings and UI, add additonal logic and tests  #
+########################################################################
  
-######################### NOTES FOR USER ##############################
-# Used with concentraion_alert_standalone_settings.txt                #
-# Used in conjunction with this Addon:                                # 
-#   https://curseforge.com/wow/addons/concentrationalert              #
-# Join the Concentration Alert discord:                               #
-#   https://discord.com/invite/gjjA8M8KX8                             #
-# What this does:                                                     #
-# Creates a scheduled task on your computer that will use your wow    # 
-#  concentration data to send you discord alerts when close to full   #
-#######################################################################
+######################### NOTES FOR USER ###############################
+# Used in conjunction with this Addon:                                 #
+#   https://curseforge.com/wow/addons/concentrationalert               #
+# Join the Concentration Alert discord:                                #
+#   https://discord.com/invite/gjjA8M8KX8                              #
+# What this does:                                                      #
+#   Creates a scheduled task on your computer that will use your wow   #
+#   concentration data to send you discord alerts when close to full   #
+########################################################################
 
-#######################################################################
-########           Do not Modify anything below this           ########
-#######################################################################
+########################################################################
+########           Do not Modify anything below this            ########
+########################################################################
 
-#check task to see what gui to show at start
-param ([switch]$runFromTask)
-if (!$runFromTask) {$canToast = $True}
+# check task to see what gui to show at start
+param (
+    [switch]$runFromTask,
+    [ValidateSet('install', 'uninstall', 'reinstall', 'test')]
+    [string]$operation,
+    [string]$resultPath
+)
+if ($operation) {
+    $canToast = $False
+} elseif (!$runFromTask) {
+    $canToast = $True
+}
 
 # Current Concentration interval
-$conMath = 0.1736111111111111 # per minute. Seconds for 0 to 1000 currently = 345600, which equals 0.17361 (with a line over it) per 60 seconds
+# in case they change recharge cycle, can get with: : /dump C_CurrencyInfo.GetCurrencyInfo(3045)
+$conMath = 250 / 24 / 60 # 0.1736111111111111 # per minute. Seconds for 0 to 1000 currently = 345600, which equals 0.17361 (with a line over it) per 60 seconds 0.0028935185185185 # CONCENTRATION_RECHARGE_RATE_IN_SECONDS = 250 / 24 / 3600
 # script version
-$version = "v1.0.0"
+$version = "v2.0.0"
 
 # paths of this script
 $scriptDir = $PSScriptRoot
 $scriptPath = $PSCommandPath
 if (!$scriptDir) {$scriptDir = (Get-Location).path}
 if (!$scriptPath) {($scriptPath = "$(Get-Location)\concentration_alert_standalone.ps1")}
-$conPath = "$scriptDir\conInfo.csv"
+$wScript = Join-Path $env:WINDIR 'System32\wscript.exe'
+$taskLauncherPath = Join-Path $scriptDir 'taskLauncher.js'
+$settingsPath = Join-Path $scriptDir 'concentration_alert_standalone_settings.json'
 
+# Create taskLaunhcer.js if it does not exist
+Function New-TaskLauncher {
+    if (!(Test-Path $taskLauncherPath)) {
+        $taskLauncherContent = @"
+// taskLauncher.js for WoW Concentration Alert app
+// Windows task manager runs this to launch powershell for no visible or 'flash' window.
+// see: https://github.com/PowerShell/PowerShell/issues/3028
+var objShell = new ActiveXObject("WScript.Shell");
+
+if (WScript.Arguments.length < 1) {
+    WScript.Quit(1);
+}
+
+var scriptPath = WScript.Arguments(0);
+var strCMD = 'powershell.exe' +
+    ' -WindowStyle Hidden' +
+    ' -ExecutionPolicy Bypass' +
+    ' -NoProfile' +
+    ' -NonInteractive' +
+    ' -NoLogo' +
+    ' -File "' + scriptPath + '"';
+
+// Pass every argument after the script path through to PowerShell
+for (var i = 1; i < WScript.Arguments.length; i++) {
+    strCMD += ' "' + WScript.Arguments(i).replace(/"/g, '\\"') + '"';
+}
+
+objShell.Run(strCMD, 0, false);
+"@
+        Try {
+            $taskLauncherContent | Out-File -FilePath $taskLauncherPath -Force
+        } catch {
+            throw "Failed to create taskLauncher.js: $($_.Exception.Message)"
+        }
+    }
+}
+
+# Task args
 $taskName = "WoW Concentration Alert"
 $taskArgs =  @"
-vbscript:Execute("CreateObject(""WScript.Shell"").Run ""powershell -ExecutionPolicy Bypass & '$scriptPath' -runFromTask"", 0:close")
+"$taskLauncherPath" "$scriptPath" -runFromTask
 "@
 
 Function New-Check {
     try {
-        $script:task = (get-ScheduledTask -TaskName $taskName -ErrorAction Stop).actions.arguments
-        $script:checkTask = $True
+        $currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
+        $script:task = $currentTask.actions.arguments
+        $repetitionInterval = $currentTask.Triggers[0].Repetition.Interval
+        $script:taskTriggerMinutes = if ($repetitionInterval) {[System.Xml.XmlConvert]::ToTimeSpan($repetitionInterval).TotalMinutes} else {$null}
+        Return $True
     } catch {
-        $script:checkTask = $False
+        $script:taskTriggerMinutes = $null
+        Return $False
     }
+}
+
+# expected trigger minutes come from IntervalTime when repeated alerts are on, otherwise AlertTime
+Function Get-ExpectedTaskIntervalMinutes {
+    param($SettingsObject)
+    $s = $SettingsObject
+    if (!$s) {
+        if (!(Test-Path $settingsPath)) {Return $null}
+        try {$s = Get-Content -Path $settingsPath -Raw | ConvertFrom-Json} catch {Return $null}
+    }
+    if ($s.interval -eq $True) {Return [double]$s.intervalTime}
+    Return [double]$s.alertTime
+}
+
+# returns $null if the settings file is missing/unreadable, otherwise the names of any blank fields
+Function Get-SettingsMissingFields {
+    if (!(Test-Path $settingsPath)) {Return $null}
+    try {$s = Get-Content -Path $settingsPath -Raw | ConvertFrom-Json} catch {Return $null}
+    Return $s.PSObject.Properties | ForEach-Object {
+        if ($null -eq $_.Value -or ($_.Value -is [string] -and [string]::IsNullOrWhiteSpace($_.Value))) {$_.Name}
+    }
+}
+
+# task is mismatched if either the arguments or the trigger interval are wrong
+Function Test-TaskMismatch {
+    param($SettingsObject)
+    $expectedIntervalMinutes = Get-ExpectedTaskIntervalMinutes -SettingsObject $SettingsObject
+    $argsMismatch = ($task -ne $taskArgs)
+    $triggerMismatch = ($null -eq $expectedIntervalMinutes) -or ($null -eq $taskTriggerMinutes) -or ($taskTriggerMinutes -ne $expectedIntervalMinutes)
+    Return ($argsMismatch -or $triggerMismatch)
+}
+
+Function Wait-ForTaskState {
+    param(
+        [bool]$ShouldExist,
+        [int]$TimeoutSeconds = 5
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $taskExists = New-Check
+        if ($taskExists -eq $ShouldExist) {return $taskExists}
+        Start-Sleep -Milliseconds 100
+    } while ((Get-Date) -lt $deadline)
+
+    return (New-Check)
 }
 
 if ($canToast) {
     #check task
-    New-Check
+    $checkTask = New-Check
     if ($checkTask) {
-        if ($task -ne $taskArgs) {
-            # task settings are bad. Show install button
-            $gui = "install"
-        } elseif ($task -eq $taskArgs) {
-            # task is good, show uninstall button
-            $gui = "uninstall"
-        }
+        # task exists, show uninstall/reinstall buttons regardless of whether settings match
+        $gui = "uninstall"
     } else {
         # no task found, show install button
         $gui = "install" 
     }
+
+    # settings file missing - point the user to the gear icon to configure settings
+    $settingsFileMissing = !(Test-Path $settingsPath)
+
+    # settings file present but has blank fields
+    $settingsMissingFields = Get-SettingsMissingFields
+
+    # task exists but doesn't match current settings - prompt the user to reinstall
+    $taskSettingsMismatch = $checkTask -and (Test-TaskMismatch)
 }
 
 # toast notifications - only shown when this is run manually or from shortcut to help with debugging/status
@@ -102,6 +213,8 @@ function Send-Discord {
     #Create embed object, also adding thumbnail
     
     $embedObject = [PSCustomObject]@{
+        username = 'ConcentrationAlert'
+        avatar_url = 'https://render.worldofwarcraft.com/us/icons/56/ui_concentration.jpg'
         embeds = @([ordered]@{
             title       = $title
             description = $msg
@@ -116,7 +229,7 @@ function Send-Discord {
     } | ConvertTo-Json -Depth 4
 
     #Send over payload, converting it to JSON
-    Invoke-RestMethod -Uri $discordWebhook -Body $embedObject -Method Post -ContentType 'application/json'
+    Invoke-RestMethod -Uri $discordWebhook -Body $embedObject -Method Post -ContentType 'application/json' -TimeoutSec 15
 }
 
 Function Start-Debug {
@@ -125,21 +238,333 @@ Function Start-Debug {
     Start-Process powershell -argumentlist $argList
 }
 
-# ConcentrationAlert funcion
-Function Start-WoWConcentrationAlert {
+Function Show-SettingsWindow {
+    $settings = [ordered]@{
+        AddonLuaPath  = ''
+        RealmNames    = 'all'
+        CharNames     = 'all'
+        DiscordWebhook = ''
+        AlertTime     = '180'
+        Interval      = 'False'
+        IntervalTime  = '60'
+        KeepBuggingMe = 'False'
+    }
+    if (Test-Path $settingsPath) {
+        $existing = Get-Content -Path $settingsPath -Raw | ConvertFrom-Json
+        foreach ($name in @($settings.Keys)) {
+            $property = $existing.PSObject.Properties[$name]
+            if ($null -ne $property) {$settings[$name] = [string]$property.Value}
+        }
+    }
+    # baseline used to detect changes that require a reinstall to take effect
+    $originalAlertTime = [string]$settings['AlertTime']
+    $originalInterval = ([string]$settings['Interval'] -eq 'True')
+    $originalIntervalTime = [string]$settings['IntervalTime']
 
-    if ($canToast) {
+    $settingsForm = New-Object System.Windows.Forms.Form
+    $settingsForm.Text = 'Concentration Alert Settings'
+    $settingsForm.ClientSize = New-Object System.Drawing.Size(400, 460)
+    $settingsForm.StartPosition = 'CenterParent'
+    $settingsForm.FormBorderStyle = 'FixedDialog'
+    $settingsForm.MaximizeBox = $False
+    $settingsForm.MinimizeBox = $False
+    $settingsForm.BackColor = '#111827'
+    $settingsForm.Font = 'Segoe UI,9'
+
+    $settingsToolTip = New-Object System.Windows.Forms.ToolTip
+    $settingsToolTip.AutoPopDelay = 10000
+    $settingsToolTip.InitialDelay = 400
+    $settingsToolTip.ReshowDelay = 100
+    $settingsToolTip.ShowAlways = $True
+
+    $controls = @{}
+    Function Add-SettingTextBox {
+        param([string]$Name, [string]$LabelText, [string]$FieldValue, [string]$Description, [int]$Width = 350)
+        $fieldLabel = New-Object System.Windows.Forms.Label
+        $fieldLabel.Text = $LabelText
+        $fieldLabel.ForeColor = '#E6EDF3'
+        $fieldLabel.BackColor = '#111827'
+        $fieldLabel.AutoSize = $True
+        $fieldLabel.Location = New-Object System.Drawing.Point(18, ($script:settingsRow - 3))
+        $settingsForm.Controls.Add($fieldLabel)
+        $settingsToolTip.SetToolTip($fieldLabel, $Description)
+        $box = New-Object System.Windows.Forms.TextBox
+        $box.Text = $FieldValue
+        $box.Width = $Width
+        $box.Font = 'Segoe UI,10'
+        $box.BackColor = '#1A2233'
+        $box.ForeColor = '#E6EDF3'
+        $box.BorderStyle = 'FixedSingle'
+        $box.Location = New-Object System.Drawing.Point(18, ($script:settingsRow + 18))
+        $settingsForm.Controls.Add($box)
+        $controls[$Name] = $box
+        $script:settingsRow += 52
+    }
+    Function Add-SettingsHeader {
+        param([string]$Text)
+        $header = New-Object System.Windows.Forms.Label
+        $header.Text = $Text
+        $header.Font = 'Segoe UI,10,style=Bold'
+        $header.ForeColor = '#3B82F6'
+        $header.BackColor = '#111827'
+        $header.AutoSize = $True
+        $header.Location = New-Object System.Drawing.Point(18, $script:settingsRow)
+        $settingsForm.Controls.Add($header)
+        $script:settingsRow += 28
+    }
+
+    $script:settingsRow = 12
+    Add-SettingsHeader 'Realm Settings'
+    $addonPathRow = $script:settingsRow
+    Add-SettingTextBox -Name 'AddonLuaPath' -LabelText 'Addon Lua Path' -FieldValue ([string]$settings['AddonLuaPath']) -Description "Full path to the World of Warcraft ConcentrationAlert.lua SavedVariables file.`ne.g. C:\WOW\World of Warcraft\_retail_\WTF\Account\<ACCOUNT NAME>\SavedVariables\ConcentrationAlert.lua" -Width 270
+
+    $browseAddonPath = New-Object System.Windows.Forms.Button
+    $browseAddonPath.Text = 'Browse'
+    $browseAddonPath.Font = 'Segoe UI,10,style=Bold'
+    $browseAddonPath.Width = 70
+    $browseAddonPath.Height = 25
+    $browseAddonPath.FlatStyle = 'Flat'
+    $browseAddonPath.BackColor = '#1A2233'
+    $browseAddonPath.ForeColor = '#E6EDF3'
+    $browseAddonPath.FlatAppearance.BorderSize = 1
+    $browseAddonPath.Location = New-Object System.Drawing.Point(298, ($addonPathRow + 18))
+    $settingsForm.Controls.Add($browseAddonPath)
+    $settingsToolTip.SetToolTip($browseAddonPath, 'Browse for the ConcentrationAlert.lua file.')
+    $browseAddonPath.Add_Click({
+        $fileDialog = New-Object System.Windows.Forms.OpenFileDialog
+        $fileDialog.Filter = 'Lua files (*.lua)|*.lua|All files (*.*)|*.*'
+        $fileDialog.Title = 'Select ConcentrationAlert.lua'
+        $existingPath = $controls['AddonLuaPath'].Text
+        if ($existingPath -and (Test-Path $existingPath)) {
+            $fileDialog.InitialDirectory = Split-Path -Path $existingPath -Parent
+            $fileDialog.FileName = Split-Path -Path $existingPath -Leaf
+        }
+        if ($fileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+            $controls['AddonLuaPath'].Text = $fileDialog.FileName
+        }
+    })
+
+    Add-SettingTextBox -Name 'RealmNames' -LabelText 'Realm Names' -FieldValue ([string]$settings['RealmNames']) -Description 'Realm names to monitor, separated by commas, or all.'
+    Add-SettingTextBox -Name 'CharNames' -LabelText 'Character Names' -FieldValue ([string]$settings['CharNames']) -Description 'Character names to monitor, separated by commas, or all.'
+    Add-SettingsHeader 'Discord Settings'
+    Add-SettingTextBox -Name 'DiscordWebhook' -LabelText 'Discord Webhook' -FieldValue ([string]$settings['DiscordWebhook']) -Description 'Discord webhook URL used to send concentration alerts.'
+    Add-SettingsHeader 'Alert Settings'
+    Add-SettingTextBox -Name 'AlertTime' -LabelText 'Alert Time' -FieldValue ([string]$settings['AlertTime']) -Description 'Minutes before concentration is full when an alert should be sent.' -Width 100
+    $intervalRow = $script:settingsRow
+    Add-SettingTextBox -Name 'IntervalTime' -LabelText 'Repeated Alerts Interval' -FieldValue ([string]$settings['IntervalTime']) -Description 'Minutes between repeated alerts.' -Width 100
+
+    $interval = New-Object System.Windows.Forms.CheckBox
+    $interval.Text = 'Send Repeated Alerts'
+    $interval.Checked = [string]$settings['Interval'] -eq 'True'
+    $interval.ForeColor = '#E6EDF3'
+    $interval.BackColor = '#111827'
+    $interval.AutoSize = $True
+    $interval.Location = New-Object System.Drawing.Point(140, ($intervalRow + 20))
+    $settingsForm.Controls.Add($interval)
+    $settingsToolTip.SetToolTip($interval, 'Enable repeated alerts at the configured interval.')
+    $controls['Interval'] = $interval
+
+    $keepBuggingMe = New-Object System.Windows.Forms.CheckBox
+    $keepBuggingMe.Text = 'Keep Bugging Me'
+    $keepBuggingMe.Checked = [string]$settings['KeepBuggingMe'] -eq 'True'
+    $keepBuggingMe.ForeColor = '#E6EDF3'
+    $keepBuggingMe.BackColor = '#111827'
+    $keepBuggingMe.AutoSize = $True
+    $keepBuggingMe.Location = New-Object System.Drawing.Point(285, ($intervalRow + 20))
+    $settingsForm.Controls.Add($keepBuggingMe)
+    $settingsToolTip.SetToolTip($keepBuggingMe, 'Continue sending alerts after concentration is full. (For up to 24hrs)')
+
+    # tie interval-dependent controls to the checkbox state
+    Function Update-IntervalControlsState {
+        $controls['IntervalTime'].Enabled = $interval.Checked
+        $keepBuggingMe.Enabled = $interval.Checked
+    }
+    $interval.Add_CheckedChanged({ Update-IntervalControlsState })
+    Update-IntervalControlsState
+
+    $buttonRow = $script:settingsRow + 20
+    $settingsForm.ClientSize = New-Object System.Drawing.Size(410, ($buttonRow + 56))
+
+    $save = New-Object System.Windows.Forms.Button
+    $save.Text = 'Save'
+    $save.Width = 125
+    $save.Height = 36
+    $save.BackColor = '#22C55E'
+    $save.ForeColor = '#E6EDF3'
+    $save.Font = 'Segoe UI,11,style=Bold'
+    $save.FlatStyle = 'Flat'
+    $save.FlatAppearance.BorderSize = 0
+    $save.Location = New-Object System.Drawing.Point(18, $buttonRow)
+    $save.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $settingsForm.Controls.Add($save)
+    $cancel = New-Object System.Windows.Forms.Button
+    $cancel.Text = 'Cancel'
+    $cancel.Width = 125
+    $cancel.Height = 36
+    $cancel.BackColor = '#EF4444'
+    $cancel.ForeColor = '#E6EDF3'
+    $cancel.Font = 'Segoe UI,11,style=Bold'
+    $cancel.FlatStyle = 'Flat'
+    $cancel.FlatAppearance.BorderSize = 0
+    $cancel.Location = New-Object System.Drawing.Point(155, $buttonRow)
+    $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $settingsForm.Controls.Add($cancel)
+    $settingsForm.CancelButton = $cancel
+    $script:settingsFormWasCancelled = $False
+
+    Function Save-SettingsForm {
+        $alertTime = 0
+        $intervalTime = 0
+        [int]::TryParse($controls.IntervalTime.Text, [ref]$intervalTime) | Out-Null
+        if (![int]::TryParse($controls.AlertTime.Text, [ref]$alertTime) -or $alertTime -lt 10 -or
+            ($interval.Checked -and ($intervalTime -lt 10 -or $intervalTime -gt $alertTime))) {
+            [System.Windows.Forms.MessageBox]::Show("Alert Time must be 10 or greater, and Interval Time must be at least 10 and at most the Alert Time Value (currently set to: $alertTime).", 'Invalid Settings')
+            $settingsForm.DialogResult = [System.Windows.Forms.DialogResult]::None
+            return $False
+        }
+        [ordered]@{
+            AddonLuaPath = $controls.AddonLuaPath.Text
+            RealmNames = $controls.RealmNames.Text
+            CharNames = $controls.CharNames.Text
+            DiscordWebhook = $controls.DiscordWebhook.Text
+            AlertTime = $alertTime
+            Interval = $interval.Checked
+            IntervalTime = $intervalTime
+            KeepBuggingMe = $keepBuggingMe.Checked
+        } | ConvertTo-Json | Set-Content -Path $settingsPath -Encoding UTF8
+        $script:settingsChangeDetected = (
+            $interval.Checked -ne $originalInterval -or
+            [string]$alertTime -ne $originalAlertTime -or
+            [string]$intervalTime -ne $originalIntervalTime
+        )
+        if ($script:label_status -and $script:settingsChangeDetected) {
+            $actionVerb = if ($script:button_install -and $script:button_install.Visible) {'Install'} else {'Reinstall'}
+            $script:label_status.ForeColor = "#F59E08"
+            $script:label_status.text = "Settings Change Detected. Please click $actionVerb for them to take effect."
+            $script:label_status.Refresh()
+        }
+        return $True
+    }
+
+    $save.Add_Click({Save-SettingsForm})
+    $cancel.Add_Click({$script:settingsFormWasCancelled = $True})
+    $settingsForm.Add_FormClosed({
+        if (!$script:settingsFormWasCancelled) {Save-SettingsForm}
+        $script:settingsFormWasCancelled = $False
+    })
+
+    [void]$settingsForm.ShowDialog($form)
+    $settingsForm.Dispose()
+}
+
+Function Start-Test {
+    # run a test to check for lua file, concentration data, task created, taskLauncher file, and discord webhook test
+    $button_install.Enabled = $False
+    $button_install.Visible = $False
+    $button_uninstall.Enabled = $False
+    $button_uninstall.Visible = $False
+    $button_reinstall.Enabled = $False
+    $button_reinstall.Visible = $False
+    $label_test.Enabled = $False
+    $label_status.ForeColor = "#F59E08"
+    $label_status.text = "Beginning Tests .."
+    $label_status.Refresh()
+    Start-Sleep -Seconds 1
+    if (Test-Path $settingsPath) {
+        $set = Get-Content -Path $settingsPath -Raw | ConvertFrom-Json
+    } else {
+        $label_status.ForeColor = "#EF4444"
+        $label_status.text = "Test failed! Settings file not found`nClick the gear icon to configure settings first."
+        $label_test.Enabled = $True
+        $label_status.Refresh()
+        Return $False
+    }
+    $settingsCheck = $set.PSObject.Properties | ForEach-Object {
+        if ($null -eq $_.Value -or ($_.Value -is [string] -and [string]::IsNullOrWhiteSpace($_.Value))) {$_.Name}
+    }
+        if ($settingsCheck) {
+            $label_status.ForeColor = "#EF4444"
+            $label_status.text = "Test failed! Missing Settings: $settingsCheck"
+            $label_test.Enabled = $True
+            $label_status.Refresh()
+            Return $False
+        }
+        if ( !(Test-Path $set.addonLuaPath) ) {
+            $label_status.ForeColor = "#EF4444"
+            $label_status.text = "Test failed! ConcentrationAlert Lua file not found.`nInstall the addon first or check settings?"
+            $label_test.Enabled = $True
+            $label_status.Refresh()
+            Return $False
+        } else {
+            Try {
+                $addonDataTest = Get-Content -Raw $set.addonLuaPath
+            } Catch {
+                $label_status.ForeColor = "#EF4444"
+                $label_status.text = "Test failed! Unable to read ConcentrationAlert Lua file.`nError: $($_.Exception.Message)"
+                $label_test.Enabled = $True
+                $label_status.Refresh()
+                Return $False
+            }
+            if (!$addonDataTest) {
+                $label_status.ForeColor = "#EF4444"
+                $label_status.text = "Test failed! ConcentrationAlert Data not found.`nMake sure to open crafting window one time and /reload"
+                $label_test.Enabled = $True
+                $label_status.Refresh()
+                Return $False
+            } else {
+                $checkTask = New-Check
+                if (!$checkTask) {
+                    $label_status.ForeColor = "#EF4444"
+                    $label_status.text = "Test failed! Scheduled task not found.`nPlease Reinstall and try again."
+                    $label_test.Enabled = $True
+                    $label_status.Refresh()
+                    Return $False
+                }
+                if (!(Test-Path $taskLauncherPath)) {
+                    $label_status.ForeColor = "#EF4444"
+                    $label_status.text = "Test failed! Did not find taskLauncher.js file.`nPlease Reinstall and try again."
+                    $label_test.Enabled = $True
+                    $label_status.Refresh()
+                    Return $False
+                }
+                Try {
+                    Send-Discord -discordWebhook $set.DiscordWebhook -icon 'https://raw.githubusercontent.com/ninthwalker/github/main/img/wowcdnotifier/world-of-warcraft.png' -title 'Concentration Alert Test' -color '5763719' -msg "**You are good to go!**"
+                } Catch {
+                    $label_status.ForeColor = "#EF4444"
+                    $label_status.text = "Test failed! Unable to send to discord`nError: $($_.Exception.Message)"
+                    $label_test.Enabled = $True
+                    $label_status.Refresh()
+                    Return $False
+                }
+                # All tests passed
+                $label_status.ForeColor = "#22C55E"
+                $label_status.text = "All tests passed!"
+                $label_test.Enabled = $True
+                $label_status.Refresh()
+            }
+        }
+    Return $True
+}
+
+# ConcentrationAlert function
+Function Start-WoWConcentrationAlert {
+    param(
+        [switch]$Update
+    )
+    if ($canToast) {$form.MinimizeBox = $False}
+    if ($canToast -and !$update) {
         # Disable buttons and clear status
         $button_install.Enabled = $False
-        $label_status.ForeColor = "#ffff00"
+        $button_install.Visible = $False
+        $label_status.ForeColor = "#F59E08"
         $label_status.text = "Installing .."
         $label_status.Refresh()
         Start-Sleep -Seconds 1
     }
 
     # create scheduled task if it does not exist
-    # uses this code to create the task for you:
     Function New-CdTask {
+        New-TaskLauncher
         if ($set.interval -eq $True) {
             $taskIntervalTime = $set.intervalTime
         } else {
@@ -147,32 +572,24 @@ Function Start-WoWConcentrationAlert {
         }
         $taskInterval = (New-TimeSpan -Minutes $taskIntervalTime)
         $taskTrigger  = New-ScheduledTaskTrigger -Once -At 00:00 -RepetitionInterval $taskInterval
-        $taskAction   = New-ScheduledTaskAction -Execute 'mshta' -Argument $taskArgs
+        $taskAction   = New-ScheduledTaskAction -Execute $wScript -Argument $taskArgs
         $taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -StartWhenAvailable -DontStopIfGoingOnBatteries
-        Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $taskTrigger -Settings $taskSettings -Description "Sends a discord alert for WoW Concentration"
+        Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $taskTrigger -Settings $taskSettings -Description "Sends a discord alert for WoW Concentration" -ErrorAction Stop
     }
 
-    # Import settings
-    Function Get-Settings ([string]$fileName) {
-        $data = New-Object PSCustomObject
-        switch -regex -file $fileName {
-            "^\s*([^#]+?)\s*=\s*(.*)" { # recognize a property
-                $name,$value = $matches[1..2]
-                $data | Add-Member -Type NoteProperty -Name $name -Value $value
-            }
-        }
-        $data
-    }
-
-    if (Test-Path $scriptDir\concentration_alert_standalone_settings.txt) {
-        $set = Get-Settings $scriptDir\concentration_alert_standalone_settings.txt
+    if (Test-Path $settingsPath) {
+        $set = Get-Content -Path $settingsPath -Raw | ConvertFrom-Json
     } else {
         if ($canToast) {
-            New-PopUp -msg "Couldn't find settings file. Please check settings!" -icon "Warning"
-            $label_status.ForeColor = "#ffff00"
-            $label_status.text = "Couldn't find settings file.`r`nPlease Check settings and try again."
+            New-PopUp -msg "No settings detected. Click the gear icon and configure settings first." -icon "Warning"
+            $label_status.ForeColor = "#F59E08"
+            $label_status.text = "No settings detected.`r`nClick the gear icon and configure settings first."
             $label_status.Refresh()
             $button_install.Enabled = $True
+            $button_install.Visible = $True
+        }
+        if ($operation -in @('install', 'reinstall')) {
+            throw "Install verification failed. No settings detected`nClick the gear icon and configure settings first."
         }
         Return
     }
@@ -181,81 +598,96 @@ Function Start-WoWConcentrationAlert {
     if ($set.charNames -like '*,*') { $set.charNames = $set.charNames.Split(',') }
 
     # verify settings before moving on
-    $settingsCheck = $set.PSObject.Properties | % { if ($_.value -eq "") {$_.name} }
+    $settingsCheck = $set.PSObject.Properties | ForEach-Object {
+        if ($null -eq $_.Value -or ($_.Value -is [string] -and [string]::IsNullOrWhiteSpace($_.Value))) {$_.Name}
+    }
     if ($settingsCheck) {
         if ($canToast) {
             New-PopUp -msg "Missing Settings! Please fix $settingsCheck" -icon "Warning"
-            $label_status.ForeColor = "#ffff00"
+            $label_status.ForeColor = "#F59E08"
             $label_status.text = "Missing Settings! Please fix:`r`n$settingsCheck"
             $label_status.Refresh()
             $button_install.Enabled = $True
+            $button_install.Visible = $True
+        }
+        if ($operation -in @('install', 'reinstall')) {
+            throw "Install verification failed. Missing Settings: $settingsCheck"
         }
         Return
     }
 
     # only run this section if its NOT being run from the scheduled task. sets up the scheduled task
-    if ($canToast) {
+    if ($canToast -or $operation) {
 
         #check task
-        New-Check
+        $checkTask = New-Check
         if ($checkTask) {
     
-            if ($task -ne $taskArgs) {
+            if (Test-TaskMismatch -SettingsObject $set) {
                 # task path is bad, delete and re-create
                 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
-                Start-Sleep -Seconds 1
+                Wait-ForTaskState -ShouldExist $False | Out-Null
                 New-CdTask
-                Start-Sleep -Seconds 1
-                New-Check
-                if ( ($checkTask -eq $taskArgs) -and $canToast) {
+                Wait-ForTaskState -ShouldExist $True | Out-Null
+                $checkTask = New-Check
+                if ( (!(Test-TaskMismatch -SettingsObject $set)) -and $canToast) {
                     New-PopUp -msg "Install completed successfully. Have fun!" -icon "Info"
-                    $goodInstall = $True
-                    $label_status.ForeColor = "#7CFC00"
+                    $label_status.ForeColor = "#22C55E"
                     $label_status.text = "Install completed successfully.`r`nHave fun!"
                     $label_status.Refresh()
-                }
-                elseif ($canToast) {
+                } elseif ($canToast) {
                     New-PopUp -msg "INSTALL FAILED! Join the discord for help" -icon "Warning"
-                    $label_status.ForeColor = "#ff0000"
-                    $label_status.text = "Install Failed!!.`r`nClick the discord link below for help."
+                    $label_status.ForeColor = "#EF4444"
+                    $label_status.text = "Install Failed!`r`nClick the discord link below for help."
                     $label_status.Refresh()
                     $button_install.Enabled = $True
+                    $button_install.Visible = $True
                 }
 
-            } elseif ( ($task -eq $taskArgs) -and $canToast) {
+            } elseif ( (!(Test-TaskMismatch -SettingsObject $set)) -and $canToast) {
                 # already configured correctly
                 New-PopUp -msg "Install was already completed. Everything looks good, have fun!" -icon "Info"
-                $goodInstall = $True
-                $label_status.ForeColor = "#7CFC00"
+                $label_status.ForeColor = "#22C55E"
                 $label_status.text = "Install was already completed.`r`nEverything looks good, have fun!"
                 $label_status.Refresh()
             }
         } else {
             New-CdTask
-            Start-Sleep -Seconds 1
-            New-Check
-            Start-Sleep -Seconds 1
-            if ( ($task -eq $taskArgs) -and $canToast ) {
+            Wait-ForTaskState -ShouldExist $True | Out-Null
+            $checkTask = New-Check
+            if ( (!(Test-TaskMismatch -SettingsObject $set)) -and $canToast ) {
                 New-PopUp -msg "Install completed successfully. Have fun!" -icon "Info"
-                $goodInstall = $True
-                $label_status.ForeColor = "#7CFC00"
+                $label_status.ForeColor = "#22C55E"
                 $label_status.text = "Install completed successfully.`r`nHave fun!"
                 $label_status.Refresh()
-            }
-            elseif ($canToast) {
+            } elseif ($canToast) {
                 New-PopUp -msg "Install Failed! Join the discord for help" -icon "Warning"
-                $label_status.ForeColor = "ff0000"
+                $label_status.ForeColor = "#EF4444"
                 $label_status.text = "Install Failed!`r`nClick the Discord link below for help."
                 $label_status.Refresh()
                 $button_install.Enabled = $True
+                $button_install.Visible = $True
             }
         }
     }
 
-    # cd mappings
-    # https://wowpedia.fandom.com/wiki/TradeSkillLineID
+    if (!(Test-Path $taskLauncherPath)) {New-TaskLauncher}
+
+    # Install and reinstall only configure the task. Alert processing belongs to the scheduled run.
+    if ($operation -in @('install', 'reinstall')) {
+        $finalCheck = New-Check
+        if (!$finalCheck -or (Test-TaskMismatch -SettingsObject $set) -or !(Test-Path $taskLauncherPath)) {
+            throw "Install verification failed. Scheduled task or taskLauncher.js was not created correctly."
+        }
+        return
+    }
+
+    # cd mappings. Uncomment the correct expansion for your current profession data. If you are using multiple expansions, you can add them all to the array.
+    # https://warcraft.wiki.gg/wiki/TradeSkillLineID
     $profName = @('alchemy','tailoring','engineering','enchanting','jewelcrafting','inscription','leatherworking','blacksmithing')
-    $profID   = @(2823,2831,2827,2825,2829,2828,2830,2822)
+    # $profID = @(2823,2831,2827,2825,2829,2828,2830,2822) # DF
+    $profID   = @(2871,2883,2875,2874,2879,2878,2880,2872) # TWW
+    $profID   = @(2906,2907,2909,2910,2913,2914,2915,2918) # Midnight
     $baseUrl  = "https://render.worldofwarcraft.com/us/icons/56/"
     $map = for ($i = 0; $i -lt $profName.count; $i++) {
         [pscustomobject]@{
@@ -270,37 +702,39 @@ Function Start-WoWConcentrationAlert {
     $addonData = Get-Content -Raw $set.addonLuaPath
 
     if ($set.charNames -ne "all") {
-        $set.charNames = $set.charNames | select -Unique
+        $set.charNames = $set.charNames | Select-Object -Unique
 
         foreach ($server in $set.realmNames) {
 
             foreach ($toon in $set.charNames) {
 
                 #$filter = $waData -match ''+$toon+'_'+$server+'.*,'
-                $filter = Select-String -Pattern "\[`"$($toon)_$server.*," -InputObject $addonData -AllMatches | % {$_.matches}
+                $filter = Select-String -Pattern "\[`"$($toon)_$server.*," -InputObject $addonData -AllMatches | ForEach-Object {$_.matches}
 
                 if ($filter) {
-                    $filter | Foreach {
+                    $filter | ForEach-Object {
                         $split = $_.Value.split('"')
                         $Id = $split[1].Split('_')[2]
 
-                        $mapMatch = $map | ? {$_.ID -eq $Id}
-                        # add expiration info into PS object
-                        $conInfo += [psCustomObject]@{
-                            'name' = $split[3].Split(' ')[0]
-                            'id'   = $Id
-                            'conAmount' = $split[3].Split('_')[1]
-                            'time' = ([datetimeoffset]::FromUnixTimeSeconds($split[3].Split('_')[2])).UtcDateTime
-                            'realm' = $split[1].Split('_')[1]
-                            'char' = $split[1].Split('_')[0]
-                            'icon' = $mapMatch.Icon
-                            'link' = "https://www.wowhead.com/skill=" + $ID
-                            'alertTime' = $set.alertTime
-                            'interval' = $set.interval
-                            'intervalTime' = $set.intervalTime
-                            'keepBuggingMe' = $set.keepBuggingMe
-                            'discordWebhook' = $set.discordWebhook
-                            'timeOffset' = ([datetimeoffset]::now).Offset.Hours
+                        $mapMatch = $map | Where-Object {$_.ID -eq $Id}
+                        # only collect current expansion professions
+                        if ($mapMatch) {
+                            $conInfo += [psCustomObject]@{
+                                'name' = $split[3].Split(' ')[0]
+                                'id'   = $Id
+                                'conAmount' = $split[3].Split('_')[1]
+                                'time' = ([datetimeoffset]::FromUnixTimeSeconds($split[3].Split('_')[2])).UtcDateTime
+                                'realm' = $split[1].Split('_')[1]
+                                'char' = $split[1].Split('_')[0]
+                                'icon' = $mapMatch.Icon
+                                'link' = "https://www.wowhead.com/skill=" + $ID
+                                'alertTime' = $set.alertTime
+                                'interval' = $set.interval
+                                'intervalTime' = $set.intervalTime
+                                'keepBuggingMe' = $set.keepBuggingMe
+                                'discordWebhook' = $set.discordWebhook
+                                'timeOffset' = ([datetimeoffset]::now).Offset.Hours
+                            }
                         }
                     }
                 }
@@ -308,29 +742,31 @@ Function Start-WoWConcentrationAlert {
         }
     } else {
         # get em all
-        $filter = Select-String -Pattern '\[\".*,' -InputObject $addonData -AllMatches | % {$_.matches}
+        $filter = Select-String -Pattern '\[\".*,' -InputObject $addonData -AllMatches | ForEach-Object {$_.matches}
         if ($filter) {
-            $filter | Foreach {
+            $filter | ForEach-Object {
                 $split = $_.Value.split('"')
                 $Id = $split[1].Split('_')[2]
 
-                $mapMatch = $map | ? {$_.ID -eq $Id}
-                # add expiration info into PS object
-                $conInfo += [psCustomObject]@{
-                    'name' = $split[3].Split(' ')[0]
-                    'id'   = $Id
-                    'conAmount' = $split[3].Split('_')[1]
-                    'time' = ([datetimeoffset]::FromUnixTimeSeconds($split[3].Split('_')[2])).UtcDateTime
-                    'realm' = $split[1].Split('_')[1]
-                    'char' = $split[1].Split('_')[0]
-                    'icon' = $mapMatch.Icon
-                    'link' = "https://www.wowhead.com/skill=" + $ID
-                    'alertTime' = $set.alertTime
-                    'interval' = $set.interval
-                    'intervalTime' = $set.intervalTime
-                    'keepBuggingMe' = $set.keepBuggingMe
-                    'discordWebhook' = $set.discordWebhook
-                    'timeOffset' = ([datetimeoffset]::now).Offset.Hours
+                $mapMatch = $map | Where-Object {$_.ID -eq $Id}
+                # only collect current expansion professions
+                if ($mapMatch) {
+                    $conInfo += [psCustomObject]@{
+                        'name' = $split[3].Split(' ')[0]
+                        'id'   = $Id
+                        'conAmount' = $split[3].Split('_')[1]
+                        'time' = ([datetimeoffset]::FromUnixTimeSeconds($split[3].Split('_')[2])).UtcDateTime
+                        'realm' = $split[1].Split('_')[1]
+                        'char' = $split[1].Split('_')[0]
+                        'icon' = $mapMatch.Icon
+                        'link' = "https://www.wowhead.com/skill=" + $ID
+                        'alertTime' = $set.alertTime
+                        'interval' = $set.interval
+                        'intervalTime' = $set.intervalTime
+                        'keepBuggingMe' = $set.keepBuggingMe
+                        'discordWebhook' = $set.discordWebhook
+                        'timeOffset' = ([datetimeoffset]::now).Offset.Hours
+                    }
                 }
             }
         }
@@ -358,6 +794,9 @@ Function Start-WoWConcentrationAlert {
                 $currentConAmount = [Math]::Round($i.conAmount + (($timeNow - $i.time).TotalMinutes * $conMath))
                 $maxed = $False
             } else {
+                $concentrationFullDate = ([DateTime]$i.time)
+                $diff = $concentrationFullDate - $timeNow
+                $localTime = $concentrationFullDate.AddHours($i.timeOffset)
                 $maxed = $True
             }
 
@@ -373,9 +812,13 @@ Function Start-WoWConcentrationAlert {
                     **Time until full:** $( if($diff.days -gt 0) {"$($diff.days)d "}) $( if($diff.hours -gt 0) {"$($diff.hours)h "}) $( if($diff.minutes -gt 0) {"$($diff.minutes)m"}) $( if(($diff.minutes -le 0) -and ($diff.hours -le 0) -and ($diff.days -le 0)){"$($diff.seconds)s"}) `
                     **Full at:** $(Get-Date $localTime -F g)" -link $i.link -footer "$($i.char) | $($i.Realm)"
                 }
-            }
-            else {
+            } elseif ( ($maxed -eq $True) -and ($i.keepBuggingMe -eq $True) -and ($i.interval -eq $True) -and ($diff.TotalMinutes -ge $bugMe) -and ($diff -le 0) -and ($diff.TotalMinutes -le $i.alertTime) ) {
+                Send-Discord -discordWebhook $set.discordWebhook -icon $i.Icon -title "$($i.name) Concentration is full!" -color "15548997" -msg "**Time is money, friend!** `
+                **Current Concentration:** 1000 `
+                **Was full at:** $(Get-Date $localTime -F g)" -link $i.link -footer "$($i.char) | $($i.Realm)"
+            } else {
                 # Don't alert yet
+                # Use this to debug if needed: Write-Output "Not alerting for $($i.name) on $($i.char) in $($i.realm). Concentration won't be full until $(Get-Date $localTime -F g)."
             }
 
         }
@@ -388,29 +831,102 @@ if ($runFromTask) {Start-WowConcentrationAlert}
 Function Remove-WoWConcentrationAlert {
 
     # Disable buttons and clear status
-    $button_uninstall.Enabled = $False
-    $label_status.ForeColor = "#ffff00"
-    $label_status.text = "Uninstalling .."
-    $label_status.Refresh()
-    Start-Sleep -Seconds 1
+    if ($canToast) {
+        $button_uninstall.Enabled = $False
+        $button_uninstall.Visible = $False
+        $button_reinstall.Enabled = $False
+        $button_reinstall.Visible = $False
+        $label_status.ForeColor = "#F59E08"
+        $label_status.text = "Uninstalling .."
+        $label_status.Refresh()
+    }
 
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
-    Start-Sleep -Seconds 1
-    New-Check
+    Wait-ForTaskState -ShouldExist $False | Out-Null
+    if (Test-Path $taskLauncherPath) {
+        Try {
+            Remove-Item -Path $taskLauncherPath -Force
+        }
+        Catch {
+            Write-Output "Failed to remove task launcher."
+        }
+    }
+    $checkTask = New-Check
     if ($checkTask -and $canToast) {
         New-PopUp -msg "Uninstall Failed. Please manually check and remove scheduled task" -icon "Warning"
-            $label_status.ForeColor = "ff0000"
+            $label_status.ForeColor = "#EF4444"
             $label_status.text = "Uninstall Failed!`r`nPlease manually check and remove scheduled task."
             $label_status.Refresh()
-            $button_uninstall.Enabled = $True
     }
     elseif (!$checkTask -and $canToast) {
         New-PopUp -msg "Uninstall completed! Scheduled task has been removed" -icon "Info"
-        $label_status.ForeColor = "#7CFC00"
+        $label_status.ForeColor = "#22C55E"
         $label_status.text = "Uninstall completed!`r`nScheduled task has been removed."
         $label_status.Refresh()
     }
     Return
+}
+
+Function Update-WoWConcentrationAlert {
+
+    # Disable buttons and clear status
+    if ($canToast) {
+        $button_uninstall.Enabled = $False
+        $button_uninstall.Visible = $False
+        $button_reinstall.Enabled = $False
+        $button_reinstall.Visible = $False
+        $label_status.ForeColor = "#F59E08"
+        $label_status.text = "Reinstalling .."
+        $label_status.Refresh()
+        Start-Sleep -Seconds 1
+    }
+
+    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+    Wait-ForTaskState -ShouldExist $False | Out-Null
+    $checkTask = New-Check
+    if ($checkTask -and $canToast) {
+        New-PopUp -msg "Reinstall Failed. Please manually check and remove scheduled task" -icon "Warning"
+        $label_status.ForeColor = "#EF4444"
+        $label_status.text = "Reinstall Failed!`r`nPlease manually check and remove scheduled task."
+        $label_status.Refresh()
+    }
+    elseif (!$checkTask -and ($canToast -or $operation)) {
+        # now install again
+        Start-WowConcentrationAlert -update
+    }
+    Return
+}
+
+if ($operation) {
+    if ($operation -eq 'test') {
+        $script:testResultPath = $resultPath
+        $headlessRefresh = { }
+        foreach ($controlName in 'button_install', 'button_uninstall', 'button_reinstall', 'label_test', 'label_status') {
+            Set-Variable -Name $controlName -Value ([pscustomobject]@{})
+            Add-Member -InputObject (Get-Variable -Name $controlName -ValueOnly) -MemberType ScriptMethod -Name Refresh -Value $headlessRefresh
+        }
+        Add-Member -InputObject $label_status -MemberType ScriptProperty -Name text -Value {
+            if ($script:testResultPath -and (Test-Path $script:testResultPath)) {
+                Get-Content -Path $script:testResultPath -Raw
+            }
+        } -SecondValue {
+            if ($script:testResultPath) {Set-Content -Path $script:testResultPath -Value $args[0] -Force}
+        }
+        $testResult = Start-Test
+        if (!$testResult) {exit 1}
+        exit 0
+    }
+    try {
+        switch ($operation) {
+            'install'   { Start-WoWConcentrationAlert }
+            'uninstall' { Remove-WoWConcentrationAlert }
+            'reinstall' { Update-WoWConcentrationAlert }
+        }
+    } catch {
+        if ($resultPath) {Set-Content -Path $resultPath -Value $_.Exception.Message -Force}
+        exit 1
+    }
+    exit 0
 }
 
 if ($canToast) {
@@ -447,12 +963,13 @@ if ($canToast) {
     # main form
     $form                           = New-Object System.Windows.Forms.Form
     $form.Text                      ='WoW Concentration Alert'
-    $form.Width                     = 300
-    $form.Height                    = 180
+    $form.Width                     = 335
+    $form.Height                    = 205
     $form.AutoSize                  = $True
     $form.MaximizeBox               = $False
-    $form.BackColor                 = "#4a4a4a"
-    $form.TopMost                   = $False
+    $form.BackColor                 = "#111827"
+    $form.Font                      = 'Segoe UI,10'
+    $form.TopMost                   = $True
     $form.StartPosition             = 'CenterScreen'
     $form.FormBorderStyle           = "FixedDialog"
     $form.MinimizeBox               = $False
@@ -460,38 +977,82 @@ if ($canToast) {
 
     # install Button
     $button_install                   = New-Object system.Windows.Forms.Button
-    $button_install.BackColor         = "#f5a623"
+    $button_install.BackColor         = "#22C55E"
+    $button_install.ForeColor         = "#E6EDF3"
     $button_install.text              = "Install"
     $button_install.width             = 120
     $button_install.height            = 50
-    $button_install.location          = New-Object System.Drawing.Point(85,15)
-    $button_install.Font              = 'Microsoft Sans Serif,11,style=Bold'
+    $button_install.location          = New-Object System.Drawing.Point(105,15)
+    $button_install.Font              = 'Segoe UI,11,style=Bold'
     $button_install.FlatStyle         = "Flat"
+    $button_install.FlatAppearance.BorderSize = 0
     if ($gui -eq "install") {$button_install.Enabled = $True} else{$button_install.Enabled = $False}
     if ($gui -eq "install") {$button_install.Visible = $True} else{$button_install.Visible = $False}
 
     # uninstall Button
     $button_uninstall                    = New-Object system.Windows.Forms.Button
-    $button_uninstall.BackColor          = "#f5a623"
-    $button_uninstall.ForeColor          = "#FF0000"
+    $button_uninstall.BackColor          = "#EF4444"
+    $button_uninstall.ForeColor          = "#E6EDF3"
     $button_uninstall.text               = "Uninstall"
     $button_uninstall.width              = 120
     $button_uninstall.height             = 50
-    $button_uninstall.location           = New-Object System.Drawing.Point(85,15)
-    $button_uninstall.Font               = 'Microsoft Sans Serif,11,style=Bold'
+    $button_uninstall.location           = New-Object System.Drawing.Point(105,15)
+    $button_uninstall.Font               = 'Segoe UI,11,style=Bold'
     $button_uninstall.FlatStyle          = "Flat"
+    $button_uninstall.FlatAppearance.BorderSize = 0
     if ($gui -eq "uninstall") {$button_uninstall.Enabled = $True} else{$button_uninstall.Enabled = $False}
     if ($gui -eq "uninstall") {$button_uninstall.Visible = $True} else{$button_uninstall.Visible = $False}
+
+    # reinstall Button
+    $button_reinstall                    = New-Object system.Windows.Forms.Button
+    $button_reinstall.BackColor          = "#F59E08"
+    $button_reinstall.ForeColor          = "#E6EDF3"
+    $button_reinstall.text               = "Reinstall"
+    $button_reinstall.width              = 120
+    $button_reinstall.height             = 30
+    $button_reinstall.location           = New-Object System.Drawing.Point(105,70)
+    $button_reinstall.Font               = 'Segoe UI,10,style=Bold'
+    $button_reinstall.FlatStyle          = "Flat"
+    $button_reinstall.FlatAppearance.BorderSize = 0
+    if ($gui -eq "uninstall") {$button_reinstall.Enabled = $True} else {$button_reinstall.Enabled = $False}
+    if ($gui -eq "uninstall") {$button_reinstall.Visible = $True} else {$button_reinstall.Visible = $False}
 
     # Status label
     $label_status                   = New-Object system.Windows.Forms.Label
     $label_status.text              = ""
-    $label_status.AutoSize          = $True
-    $label_status.width             = 30
-    $label_status.height            = 20
-    $label_status.location          = New-Object System.Drawing.Point(5,75)
-    $label_status.Font              = 'Microsoft Sans Serif,10,style=Bold'
-    $label_status.ForeColor         = "#7CFC00"
+    $label_status.AutoSize          = $False
+    $label_status.width             = 320
+    $label_status.height            = 45
+    $label_status.location          = New-Object System.Drawing.Point(5,108)
+    $label_status.Font              = 'Segoe UI,10,style=Bold'
+    $label_status.ForeColor         = "#22C55E"
+    $label_status.TextAlign         = [System.Drawing.ContentAlignment]::MiddleCenter
+
+    # re-checks settings/task state and refreshes the status label - reused after the settings dialog closes
+    Function Update-MainStatusLabel {
+        $script:settingsFileMissing = !(Test-Path $settingsPath)
+        if ($script:settingsFileMissing) {
+            $label_status.ForeColor = "#F59E08"
+            $label_status.text = "Settings not detected.`r`nClick the gear icon to configure settings."
+            Return
+        }
+        $script:settingsMissingFields = Get-SettingsMissingFields
+        if ($script:settingsMissingFields) {
+            $label_status.ForeColor = "#F59E08"
+            $label_status.text = "Missing Settings! Please fix:`r`n$script:settingsMissingFields"
+            Return
+        }
+        $checkTask = New-Check
+        $script:taskSettingsMismatch = $checkTask -and (Test-TaskMismatch)
+        if ($script:taskSettingsMismatch) {
+            $label_status.ForeColor = "#F59E08"
+            $label_status.text = "Current schedule and settings mismatch detected`r`nClick reinstall to fix the issue."
+            Return
+        }
+        $label_status.ForeColor = "#22C55E"
+        $label_status.text = ""
+    }
+    Update-MainStatusLabel
 
     # version link
     $label_version            = New-Object system.Windows.Forms.LinkLabel
@@ -499,24 +1060,24 @@ if ($canToast) {
     $label_version.AutoSize   = $True
     $label_version.width      = 30
     $label_version.height     = 20
-    $label_version.location   = New-Object System.Drawing.Point(5,132)
-    $label_version.Font       = 'Microsoft Sans Serif,9,'
-    $label_version.ForeColor  = "#00ff00"
-    $label_version.LinkColor  = "#f5a623"
-    $label_version.ActiveLinkColor = "#f5a623"
+    $label_version.location   = New-Object System.Drawing.Point(5,165)
+    $label_version.Font       = 'Segoe UI,10,'
+    $label_version.ForeColor  = "#22C55E"
+    $label_version.LinkColor  = "#3B82F6"
+    $label_version.ActiveLinkColor = "#3B82F6"
     $label_version.add_Click({[system.Diagnostics.Process]::start("https://github.com/ninthwalker/ConcentrationAlert")})
 
     # Help link
     $label_help                     = New-Object system.Windows.Forms.LinkLabel
-    $label_help.text                = "Get Help (Discord)"
+    $label_help.text                = "Get Help"
     $label_help.AutoSize            = $true
     $label_help.width               = 80
     $label_help.height              = 30
-    $label_help.location            = New-Object System.Drawing.Point(185,132)
-    $label_help.Font                = 'Microsoft Sans Serif,9'
-    $label_help.ForeColor           = "#00ff00"
-    $label_help.LinkColor           = "#f5a623"
-    $label_help.ActiveLinkColor     = "#f5a623"
+    $label_help.location            = New-Object System.Drawing.Point(185,165)
+    $label_help.Font                = 'Segoe UI,10'
+    $label_help.ForeColor           = "#22C55E"
+    $label_help.LinkColor           = "#3B82F6"
+    $label_help.ActiveLinkColor     = "#3B82F6"
     $label_help.add_Click({[system.Diagnostics.Process]::start("https://discord.com/invite/gjjA8M8KX8")})
 
     # debug text
@@ -525,11 +1086,61 @@ if ($canToast) {
     $label_debug.AutoSize   = $True
     $label_debug.width      = 30
     $label_debug.height     = 20
-    $label_debug.location   = New-Object System.Drawing.Point(85,132)
-    $label_debug.Font       = 'Microsoft Sans Serif,9,'
-    $label_debug.ForeColor  = "#00ff00"
-    $label_debug.LinkColor  = "#f5a623"
-    $label_debug.ActiveLinkColor = "#f5a623"
+    $label_debug.location   = New-Object System.Drawing.Point(85,165)
+    $label_debug.Font       = 'Segoe UI,10,'
+    $label_debug.ForeColor  = "#22C55E"
+    $label_debug.LinkColor  = "#3B82F6"
+    $label_debug.ActiveLinkColor = "#3B82F6"
+
+    # settings button
+    $button_settings                 = New-Object system.Windows.Forms.Button
+    $button_settings.Text            = [char]0xE713
+    $button_settings.Font            = 'Segoe MDL2 Assets,12'
+    $button_settings.Width           = 32
+    $button_settings.Height          = 28
+    $button_settings.Location        = New-Object System.Drawing.Point(292,161)
+    $button_settings.FlatStyle       = 'Flat'
+    $button_settings.BackColor       = '#111827'
+    $button_settings.ForeColor       = '#3B82F6'
+    $button_settings.FlatAppearance.BorderSize = 0
+    $button_settings.AccessibleName  = 'Settings'
+
+    # test text
+    $label_test            = New-Object system.Windows.Forms.LinkLabel
+    $label_test.text       = "Test"
+    $label_test.AutoSize   = $True
+    $label_test.width      = 30
+    $label_test.height     = 20
+    $label_test.location   = New-Object System.Drawing.Point(142,165)
+    $label_test.Font       = 'Segoe UI,10,'
+    $label_test.ForeColor  = "#22C55E"
+    $label_test.LinkColor  = "#3B82F6"
+    $label_test.ActiveLinkColor = "#3B82F6"
+    if ($gui -eq "uninstall") {$label_test.Enabled = $True} else {$label_test.Enabled = $False}
+    if ($gui -eq "uninstall") {$label_test.Visible = $True} else {$label_test.Visible = $False}
+
+    $footerPanel = New-Object System.Windows.Forms.TableLayoutPanel
+    $footerPanel.Location = New-Object System.Drawing.Point(5,160)
+    $footerPanel.Size = New-Object System.Drawing.Size(320,32)
+    $footerPanel.ColumnCount = 5
+    $footerPanel.RowCount = 1
+    $footerPanel.BackColor = '#111827'
+    for ($column = 0; $column -lt 5; $column++) {
+        $footerPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 20)))
+    }
+    $footerPanel.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
+    foreach ($footerControl in @($label_version, $label_debug, $label_test, $label_help, $button_settings)) {
+        $footerControl.Dock = 'Fill'
+        if ($footerControl -is [System.Windows.Forms.LinkLabel]) {
+            $footerControl.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+            $footerControl.AutoSize = $False
+        }
+    }
+    $footerPanel.Controls.Add($label_version, 0, 0)
+    $footerPanel.Controls.Add($label_debug, 1, 0)
+    $footerPanel.Controls.Add($label_test, 2, 0)
+    $footerPanel.Controls.Add($label_help, 3, 0)
+    $footerPanel.Controls.Add($button_settings, 4, 0)
 
     $pictureBox_logo                 = New-Object system.Windows.Forms.PictureBox
     $pictureBox_logo.width           = 80
@@ -539,15 +1150,124 @@ if ($canToast) {
     $pictureBox_logo.SizeMode        = [System.Windows.Forms.PictureBoxSizeMode]::normal
 
     # add all controls
-    $form.Controls.AddRange(($button_install,$button_uninstall,$label_status,$label_version,$label_help,$label_debug,$pictureBox_logo))
+    $form.Controls.AddRange(($button_install,$button_uninstall,$button_reinstall,$label_status,$footerPanel,$pictureBox_logo))
+
+    $script:operationProcess = $null
+    $script:operationName = $null
+    $script:operationResultPath = $null
+    $script:operationTimer = New-Object System.Windows.Forms.Timer
+    $operationTimer.Interval = 250
+
+    Function Start-BackgroundOperation {
+        param(
+            [ValidateSet('install', 'uninstall', 'reinstall', 'test')]
+            [string]$operationName,
+            [string]$status
+        )
+
+        $button_install.Enabled = $False
+        $button_uninstall.Enabled = $False
+        $button_reinstall.Enabled = $False
+        $label_test.Enabled = $False
+        $label_debug.Enabled = $False
+        $button_settings.Enabled = $False
+        $label_status.ForeColor = "#F59E08"
+        $label_status.text = $status
+        $label_status.Refresh()
+
+        $script:operationName = $operationName
+        $script:operationResultPath = Join-Path $env:TEMP "WoWConcentrationAlert-$PID.txt"
+        Remove-Item -Path $script:operationResultPath -Force -ErrorAction SilentlyContinue
+        $powershellPath = (Get-Process -Id $PID).Path
+        $scriptArguments = @(
+            '-NoProfile'
+            '-ExecutionPolicy', 'Bypass'
+            '-File', "`"$scriptPath`""
+            '-operation', $operationName
+            '-resultPath', "`"$script:operationResultPath`""
+        )
+        $script:operationProcess = Start-Process -FilePath $powershellPath -ArgumentList $scriptArguments -WindowStyle Hidden -PassThru
+        $script:operationTimer.Start()
+    }
+
+    $operationTimer.Add_Tick({
+        if (!$script:operationProcess -or !$script:operationProcess.HasExited) {return}
+
+        $script:operationTimer.Stop()
+        $exitCode = $script:operationProcess.ExitCode
+        $script:operationProcess.Dispose()
+        $script:operationProcess = $null
+        if ($script:operationName -eq 'test' -and $exitCode -eq 0) {
+            $label_status.ForeColor = "#22C55E"
+            $label_status.text = "All tests passed!"
+        } elseif ($script:operationName -eq 'test') {
+            $label_status.ForeColor = "#EF4444"
+            if ($script:operationResultPath -and (Test-Path $script:operationResultPath)) {
+                $label_status.text = (Get-Content -Path $script:operationResultPath -Raw).Trim()
+            } else {
+                $label_status.text = "Test failed."
+            }
+        } elseif ($exitCode -eq 0) {
+            $label_status.ForeColor = "#22C55E"
+            $label_status.text = "Operation completed."
+        } else {
+            $label_status.ForeColor = "#EF4444"
+            if ($script:operationResultPath -and (Test-Path $script:operationResultPath)) {
+                $label_status.text = (Get-Content -Path $script:operationResultPath -Raw).Trim()
+            } else {
+                $label_status.text = "Operation failed. Check the debug output for details."
+            }
+        }
+        $label_status.Refresh()
+        if ($script:operationName -eq 'install' -and $exitCode -eq 0) {
+            $button_install.Enabled = $False
+            $button_install.Visible = $False
+            $button_uninstall.Enabled = $True
+            $button_uninstall.Visible = $True
+            $button_reinstall.Enabled = $True
+            $button_reinstall.Visible = $True
+            $label_test.Enabled = $True
+            $label_test.Visible = $True
+        } elseif ($script:operationName -eq 'uninstall' -and $exitCode -eq 0) {
+            $button_install.Enabled = $True
+            $button_install.Visible = $True
+            $button_uninstall.Enabled = $False
+            $button_uninstall.Visible = $False
+            $button_reinstall.Enabled = $False
+            $button_reinstall.Visible = $False
+            $label_test.Enabled = $False
+            $label_test.Visible = $False
+        } else {
+            $button_install.Enabled = $True
+            $button_uninstall.Enabled = $True
+            $button_reinstall.Enabled = $True
+        }
+        $label_test.Enabled = $True
+        $label_debug.Enabled = $True
+        $button_settings.Enabled = $True
+    })
 
     # Button methods
-    $button_install.Add_Click({Start-WowConcentrationAlert})
-    $button_uninstall.Add_Click({Remove-WoWConcentrationAlert})
+    $button_install.Add_Click({Start-BackgroundOperation -operationName 'install' -status 'Installing ..'})
+    $button_uninstall.Add_Click({Start-BackgroundOperation -operationName 'uninstall' -status 'Uninstalling ..'})
+    $button_reinstall.Add_Click({Start-BackgroundOperation -operationName 'reinstall' -status 'Reinstalling ..'})
     $label_debug.add_Click({
         Start-Debug
         $form.Dispose()
     })
+    $button_settings.Add_Click({
+        $script:settingsChangeDetected = $False
+        Show-SettingsWindow
+        if (!$script:settingsChangeDetected) {
+            Update-MainStatusLabel
+        }
+        # clears the button's focus rectangle left behind after the modal dialog closes
+        $form.ActiveControl = $null
+    })
+    $label_test.add_Click({
+        Start-BackgroundOperation -operationName 'test' -status 'Beginning Tests ..'
+    })
+    
 
     # show the forms
     $form.ShowDialog()
